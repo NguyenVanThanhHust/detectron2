@@ -1,0 +1,26 @@
+_BASE_: "Base-RCNN-FPN.yaml"
+MODEL:
+    WEIGHTS: "../pretrained_weight/FAIR/model_final_280758.pkl"
+    MASK_ON: False
+    RESNETS:
+        DEPTH: 50
+    ROI_HEADS:
+        NAME: "CustomROIHead"
+        NUM_CLASSES: 80
+        NMS_THRESH_TEST: 0.05
+        SCORE_THRESH_TEST: 0.5
+    BACKBONE:
+        FREEZE_AT: 2
+        NAME: "build_resnet_fpn_backbone"
+DATASETS:
+    TRAIN: ("HICO_DET_train_object",)
+    TEST: ("HICO_DET_test_object",)
+TEST:
+    EVAL_PERIOD: 4000 # approx 2 epoch
+SOLVER:
+    CHECKPOINT_PERIOD: 4000
+    IMS_PER_BATCH: 1
+    BASE_LR: 0.0001
+    MAX_ITER: 50000 # approx 25 epoch
+    STEPS: (15000, 35000)
+OUTPUT_DIR: "./outputs_object/"
