@@ -83,77 +83,29 @@ def load_hico_data(img_folder:str, json_folder:str, split:str):
         list_dict.append(r)
     return list_dict
 
-img_folder = "../../data/HICO_DET/images/"
+class_names = []
+img_folder = "../../../data/HICO_DET/images/"
+json_folder = "../../../data/HICO_DET/hico_det_json/"
+split="test"
 
-if os.path.isdir(img_folder):
-    class_names = []
-    img_folder = "../../data/HICO_DET/images/"
-    json_folder = "../../data/HICO_DET/hico_det_json/"
-    split="test"
+with open(osp.join(json_folder, "object_list.json")) as jfp:
+    object_list = json.load(jfp)
+    for each_object in object_list:
+        object_name = each_object["name"]
+        class_names.append(object_name)
 
-    with open(osp.join(json_folder, "object_list.json")) as jfp:
-        object_list = json.load(jfp)
-        for each_object in object_list:
-            object_name = each_object["name"]
-            class_names.append(object_name)
-
-    with open(osp.join(json_folder, "hoi_list.json")) as jfp:
-        hoi_list = json.load(jfp)
-        for i in range(600):
-            class_names.append(str(i+1))
-
-    print("Loading ...")    
-    list_data_dict = load_hico_data(img_folder=img_folder, json_folder=json_folder, split=split)    
-    print("Loaded")
-else:
-    class_names = []
-    img_folder = "../data/HICO_DET/images/"
-    json_folder = "../data/HICO_DET/hico_det_json/"
-    split="test"
-
-    with open(osp.join(json_folder, "object_list.json")) as jfp:
-        object_list = json.load(jfp)
-        for each_object in object_list:
-            object_name = each_object["name"]
-            class_names.append(object_name)
-
-    with open(osp.join(json_folder, "hoi_list.json")) as jfp:
-        hoi_list = json.load(jfp)
-        for i in range(600):
-            class_names.append(str(i+1))
-
-    print("Loading ...")    
-    list_data_dict = load_hico_data(img_folder=img_folder, json_folder=json_folder, split=split)    
-    print("Loaded")
+print("Loading ...")    
+list_data_dict = load_hico_data(img_folder=img_folder, json_folder=json_folder, split=split)    
+print("Loaded")
     
-img_folder = "../../data/HICO_DET/images/"
-if os.path.isdir(img_folder):
-    class_names = ["person"]
 
-    img_folder = "../../data/HICO_DET/images/"
-    json_folder = "../../data/HICO_DET/hico_det_json/"
-
-    assert len(class_names)==1, "number class is wrong " + str(len(class_names))
-
-    splits = ["train", "test"]
-    for split in splits:
-        DatasetCatalog.register("HICO_DET_" + split + "_person", lambda : load_hico_data(img_folder=img_folder, json_folder=json_folder, split=split))
-        MetadataCatalog.get("HICO_DET_" + split + "_person").set(thing_classes=class_names)
-else:
-    class_names = ["person"]
-
-    img_folder = "../data/HICO_DET/images/"
-    json_folder = "../data/HICO_DET/hico_det_json/"
-
-    assert len(class_names)==1, "number class is wrong " + str(len(class_names))
-
-    splits = ["train", "test"]
-    for split in splits:
-        DatasetCatalog.register("HICO_DET_" + split + "_person", lambda : load_hico_data(img_folder=img_folder, json_folder=json_folder, split=split))
-        MetadataCatalog.get("HICO_DET_" + split + "_person").set(thing_classes=class_names)
+splits = ["train", "test"]
+for split in splits:
+    DatasetCatalog.register("HICO_DET_" + split, lambda : load_hico_data(img_folder=img_folder, json_folder=json_folder, split=split))
+    MetadataCatalog.get("HICO_DET_" + split).set(thing_classes=class_names)
  
         
-metadata = MetadataCatalog.get("HICO_DET_train_person")
+metadata = MetadataCatalog.get("HICO_DET_train")
 
 debug_list = [ "HICO_test2015_00009762"
                     ," HICO_test2015_00009763"
@@ -162,7 +114,7 @@ debug_list = [ "HICO_test2015_00009762"
                     , "HICO_test2015_00009766"
                     , "HICO_test2015_00009767"]
                     
-dataset_dicts = DatasetCatalog.get('HICO_DET_test_person')
+dataset_dicts = DatasetCatalog.get('HICO_DET_test')
 
 for d in dataset_dicts:
     image_id = d["image_id"]
@@ -173,7 +125,7 @@ for d in dataset_dicts:
     v = Visualizer(img[:, :, ::-1], metadata=metadata, scale=0.5)
     v = v.draw_dataset_dict(d)
     img = cv2.cvtColor(v.get_image()[:, :, ::-1], cv2.COLOR_BGR2RGB)
-    output_path = "outputs_person/inputs/" + global_id + ".jpg"
+    output_path = "outputs/" + global_id + ".jpg"
     print(output_path)
     cv2.imwrite(output_path, img)
     
