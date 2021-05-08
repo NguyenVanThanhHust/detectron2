@@ -69,6 +69,8 @@ def load_hico_data(img_folder:str, json_folder:str, split:str):
         
         r["annotations"] = instances
         list_dict.append(r)
+    print("number of instance: ", len(list_dict))
+    print("Example of instace: ", list_dict[100])
     return list_dict
 
 class_names = []

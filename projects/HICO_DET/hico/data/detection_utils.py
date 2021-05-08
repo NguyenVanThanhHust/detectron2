@@ -175,13 +175,6 @@ def transform_instance_annotations(
                 "Supported types are: polygons as list[list[float] or ndarray],"
                 " COCO-style RLE as a dict.".format(type(segm))
             )
-
-    if "keypoints" in annotation:
-        keypoints = transform_keypoint_annotations(
-            annotation["keypoints"], transforms, image_size, keypoint_hflip_indices
-        )
-        annotation["keypoints"] = keypoints
-
     return annotation
 
 def transform_keypoint_annotations(keypoints, transforms, image_size, keypoint_hflip_indices=None):
