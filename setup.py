@@ -184,12 +184,6 @@ def get_model_zoo_configs() -> List[str]:
 
 # For projects that are relative small and provide features that are very close
 # to detectron2's core functionalities, we install them under detectron2.projects
-PROJECTS = {
-    "detectron2.projects.point_rend": "projects/PointRend/point_rend",
-    "detectron2.projects.deeplab": "projects/DeepLab/deeplab",
-    "detectron2.projects.panoptic_deeplab": "projects/Panoptic-DeepLab/panoptic_deeplab",
-}
-
 setup(
     name="detectron2",
     version=get_version(),
@@ -197,8 +191,7 @@ setup(
     url="https://github.com/facebookresearch/detectron2",
     description="Detectron2 is FAIR's next-generation research "
     "platform for object detection and segmentation.",
-    packages=find_packages(exclude=("configs", "tests*")) + list(PROJECTS.keys()),
-    package_dir=PROJECTS,
+    packages=find_packages(exclude=("configs", "tests*")),
     package_data={"detectron2.model_zoo": get_model_zoo_configs()},
     python_requires=">=3.6",
     install_requires=[

@@ -73,8 +73,8 @@ def load_hico_data(img_folder:str, json_folder:str, split:str):
 
 class_names = []
 
-img_folder = "../data/HICO_DET/images/"
-json_folder = "../data/HICO_DET/hico_det_json/"
+img_folder = "../../../data/HICO_DET/images/"
+json_folder = "../../../data/HICO_DET/hico_det_json/"
 with open(osp.join(json_folder, "object_list.json")) as jfp:
     object_list = json.load(jfp)
     for each_object in object_list:

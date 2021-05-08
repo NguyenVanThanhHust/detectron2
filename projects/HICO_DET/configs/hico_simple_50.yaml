@@ -1,6 +1,6 @@
 _BASE_: "Base-RCNN-FPN.yaml"
 MODEL:
-    WEIGHTS: "../pretrained_weight/FAIR/model_final_280758.pkl"
+    WEIGHTS: "../../../pretrained_weight/FAIR/model_final_280758.pkl"
     MASK_ON: False
     PIXEL_STD: [57.375, 57.120, 58.395]
     RESNETS:
