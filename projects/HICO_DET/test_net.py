@@ -44,7 +44,7 @@ from detectron2.utils.events import (
     TensorboardXWriter,
 )
 from detectron2.evaluation import inference_context, print_csv_format
-from data.hico_object_dataset import *
+from data.hico_dataset import *
 from default import default_argument_parser
 from hico import add_hico_base_config, HicoEvaluator
 from hico.data.build import custom_train_loader, custom_test_loader
@@ -169,7 +169,7 @@ def main(args):
     cfg = setup(args)
     weight_path = args.weight_path
     model = build_model(cfg)
-    # logger.info("Model:\n{}".format(model))
+    logger.info("Model:\n{}".format(model))
     DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
         weight_path, resume=args.resume
     )
