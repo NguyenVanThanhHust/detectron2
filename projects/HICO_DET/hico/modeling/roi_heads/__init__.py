@@ -1,1 +1,1 @@
-from .roi_heads import CustomROIHead
+from .roi_heads import CustomROIHeads

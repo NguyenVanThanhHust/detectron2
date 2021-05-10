@@ -20,7 +20,7 @@ def load_hico_data(img_folder:str, json_folder:str, split:str):
     """
     Load data
     """
-    assert split in ["train", "test"], "split must be train or test"
+    assert split in ["train", "test", "overfit"], "split must be train/test/overfit"
     list_dict = []
     with open(osp.join(json_folder, "anno_list.json")) as jfp:
         full_data = json.load(jfp)
@@ -29,7 +29,10 @@ def load_hico_data(img_folder:str, json_folder:str, split:str):
 
     for each_instance in full_data:
         global_id = each_instance["global_id"]
-        if split not in global_id:
+        if split == "overfit":
+            if global_id != "HICO_train2015_00038131":
+                continue
+        if split != "overfit" and split not in global_id:
             continue
         if global_id == "HICO_train2015_00011533":
             continue
@@ -70,7 +73,10 @@ def load_hico_data(img_folder:str, json_folder:str, split:str):
         r["annotations"] = instances
         list_dict.append(r)
     print("number of instance: ", len(list_dict))
-    print("Example of instace: ", list_dict[100])
+    if split != "overfit":
+        print("Example of instace: ", list_dict[100])
+    else:
+        print(list_dict)    
     return list_dict
 
 class_names = []
@@ -85,7 +91,7 @@ with open(osp.join(json_folder, "object_list.json")) as jfp:
 
 assert len(class_names)==80, "number class is wrong " + str(len(class_names))
 
-splits = ["train", "test"]
+splits = ["train", "test", "overfit", ]
 for split in splits:
     DatasetCatalog.register("HICO_DET_" + split, lambda : load_hico_data(img_folder=img_folder, json_folder=json_folder, split=split))
     MetadataCatalog.get("HICO_DET_" + split).set(thing_classes=class_names)

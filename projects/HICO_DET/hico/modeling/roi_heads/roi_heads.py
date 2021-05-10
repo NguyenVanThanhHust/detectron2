@@ -6,15 +6,19 @@ from detectron2.modeling.roi_heads import select_foreground_proposals
 from detectron2.structures import Boxes
 
 @ROI_HEADS_REGISTRY.register()
-class CustomROIHead(StandardROIHeads): 
+class CustomROIHeads(StandardROIHeads): 
 
     def __init__(self, cfg, input_shape):
-        super(CustomROIHead, self).__init__(cfg, input_shape)
+        super(CustomROIHeads, self).__init__(cfg, input_shape)
         self.config = cfg
 
     def forward(self, images, features, proposals, targets=None):
         if self.training:
             assert targets
+            # print(len(proposals))
+            # print(proposals[0])
+            print(targets)
+            sys.exit()
             proposals = self.label_and_sample_proposals(proposals, targets)    
         
         del targets
