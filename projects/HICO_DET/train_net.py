@@ -223,6 +223,7 @@ def setup(args):
     """
     cfg = get_cfg()
     add_hico_base_config(cfg)
+    print(args.config_file)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()

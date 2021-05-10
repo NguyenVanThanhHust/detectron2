@@ -1,1 +1,1 @@
-from .roi_heads import CustomROIHeads
+from .roi_heads import CustomROIHeads, ObjectROIHeads, HumanROIHeads
