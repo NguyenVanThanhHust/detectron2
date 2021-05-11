@@ -7,17 +7,13 @@ from detectron2.structures import Boxes
 from detectron2.utils.registry import Registry
 
 ROI_OBJECT_HEAD_REGISTRY = Registry("OBJECT_ROI_HEADS")
-ROI_OBJECT_HEAD_REGISTRY.__doc__ == """
-Registry for contact heads, which make contact predictions from per-region features.
-The registered object will be called with obj(cfg,, input_shape).
-"""
 
 @ROI_OBJECT_HEAD_REGISTRY.register()
 class ObjectROIHeads(StandardROIHeads): 
 
     def __init__(self, cfg, input_shape):
         # super(ObjectROIHeads, self).__init__(cfg, input_shape)
-        super().__init__()
+        super(ObjectROIHeads, self).__init__(cfg, input_shape)
         self.config = cfg
     
     def forward(self, images, features, proposals, targets=None):
@@ -25,7 +21,7 @@ class ObjectROIHeads(StandardROIHeads):
             assert targets
             proposals = self.label_and_sample_proposals(proposals, targets)    
         
-        del targets
+        # del targets
 
         if self.training:
             losses = self._forward_box(features, proposals)

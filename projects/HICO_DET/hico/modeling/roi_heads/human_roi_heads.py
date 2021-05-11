@@ -21,7 +21,7 @@ class HumanROIHeads(StandardROIHeads):
 
     def forward(self, images, features, proposals, targets=None):
         if self.training:
-            assert targets
+            # assert targets
             print(targets)
             proposals = self.label_and_sample_proposals(proposals, targets)    
         
