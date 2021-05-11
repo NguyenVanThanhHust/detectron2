@@ -20,7 +20,6 @@ MODEL:
         NUM_CLASSES: 1
         NMS_THRESH_TEST: 0.3
         SCORE_THRESH_TEST: 0.05
-
     BACKBONE:
         FREEZE_AT: 2
         NAME: "build_resnet_fpn_backbone"

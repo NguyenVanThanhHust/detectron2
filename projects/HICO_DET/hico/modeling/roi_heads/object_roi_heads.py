@@ -16,13 +16,13 @@ The registered object will be called with obj(cfg,, input_shape).
 class ObjectROIHeads(StandardROIHeads): 
 
     def __init__(self, cfg, input_shape):
-        super(ObjectROIHeads, self).__init__(cfg, input_shape)
+        # super(ObjectROIHeads, self).__init__(cfg, input_shape)
+        super().__init__()
         self.config = cfg
-
+    
     def forward(self, images, features, proposals, targets=None):
         if self.training:
             assert targets
-            print(targets)
             proposals = self.label_and_sample_proposals(proposals, targets)    
         
         del targets
@@ -36,3 +36,7 @@ class ObjectROIHeads(StandardROIHeads):
             # applied to the top scoring box detections.
             pred_instances = self.forward_with_given_boxes(features, pred_instances)
             return pred_instances, {}
+
+def build_object_roi_head(cfg, input_shape):
+    name = cfg.MODEL.OBJECT_ROI_HEADS.NAME 
+    return ROI_OBJECT_HEAD_REGISTRY.get(name)(cfg, input_shape)      
