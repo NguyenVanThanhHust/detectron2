@@ -38,11 +38,11 @@ class CustomROIHeads(StandardROIHeads):
 
     #     self.object_roi_heads = build_object_roi_head(cfg, shape)
 
-    def _forward_object(self, features, proposals, targets=None):
+    def _forward_object(self, images, features, proposals, targets=None):
         if self.training:
             assert targets
-            loss = self._forward_box(features, proposals)
-            return proposals, loss
+            object_proposals, loss = self.object_roi_heads.forward(images, features, proposals, targets)
+            return object_proposals, loss
         else:
             pred_instances = self._forward_box(features, proposals)
             # During inference cascaded prediction is used: the mask and keypoints heads are only
@@ -55,10 +55,10 @@ class CustomROIHeads(StandardROIHeads):
             assert targets
             proposals = self.label_and_sample_proposals(proposals, targets)    
             losses = self._forward_box(features, proposals)
-            object_proposals, object_losses = self._forward_object(features, proposals, targets)
-            del images, targets
-            print(losses)
+            object_proposals, object_losses = self._forward_object(images, features, proposals, targets)
+
             losses.update(object_losses)
+            del images, targets
             return proposals, losses
         else:
             pred_instances = self._forward_box(features, proposals)
