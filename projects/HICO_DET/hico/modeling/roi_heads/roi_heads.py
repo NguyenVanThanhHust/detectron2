@@ -4,7 +4,7 @@ from detectron2.modeling.poolers import ROIPooler
 from detectron2.layers import ShapeSpec
 from detectron2.modeling.roi_heads import select_foreground_proposals
 from detectron2.structures import Boxes
-from .object_roi_heads import build_object_roi_head, ObjectROIHeads
+from .object_roi_heads import build_object_roi_head, ObjectROIHeads, object_detection_loss
 
 @ROI_HEADS_REGISTRY.register()
 class CustomROIHeads(StandardROIHeads): 

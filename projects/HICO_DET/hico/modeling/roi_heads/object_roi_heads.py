@@ -8,6 +8,10 @@ from detectron2.utils.registry import Registry
 
 ROI_OBJECT_HEAD_REGISTRY = Registry("OBJECT_ROI_HEADS")
 
+def object_detection_loss(predictions, proposals):
+    
+    return
+
 @ROI_OBJECT_HEAD_REGISTRY.register()
 class ObjectROIHeads(StandardROIHeads): 
 
@@ -25,6 +29,10 @@ class ObjectROIHeads(StandardROIHeads):
 
         if self.training:
             losses = self._forward_box(features, proposals)
+            # print(features, proposals)
+            # print(type(features), type(proposals))
+            # print(features.keys())
+            # print(type(proposals[0]))
             return proposals, losses
         else:
             pred_instances = self._forward_box(features, proposals)

@@ -16,6 +16,12 @@ except:
 
 __all__ = ["load_hico_data",]
 
+list_over_fit = [
+    "HICO_train2015_00038129",
+    "HICO_train2015_00038131",
+    "HICO_train2015_00038133",
+    "HICO_train2015_00038135",
+]
 def load_hico_data(img_folder:str, json_folder:str, split:str):
     """
     Load data
@@ -30,7 +36,7 @@ def load_hico_data(img_folder:str, json_folder:str, split:str):
     for each_instance in full_data:
         global_id = each_instance["global_id"]
         if split == "overfit":
-            if global_id != "HICO_train2015_00038131":
+            if global_id not in list_over_fit:
                 continue
         if split != "overfit" and split not in global_id:
             continue
