@@ -48,12 +48,14 @@ class HicoEvaluator(DatasetEvaluator):
         for input, output in zip(inputs, outputs):
             image_id = input["image_id"]
             instances = output["instances"].to(self._cpu_device)
-            boxes = instances.pred_boxes.tensor.numpy()
+            human_boxes = instances.human_boxes.tensor.numpy()
+            object_boxes = instances.object_boxes.tensor.numpy()
             scores = instances.scores.tolist()
             classes = instances.pred_classes.tolist()
             for box, score, each_cls in zip(boxes, scores, classes):
                 xmin, ymin, xmax, ymax = box
-                _tmp_dict = {"cls": each_cls, "box":[xmin, ymin, xmax, ymax],
+                _tmp_dict = {"cls": each_cls, "human_box":[xmin, ymin, xmax, ymax],
+                    "object_box":[]
                     "score":score}
 
                 # The inverse of data loading logic in `datasets/pascal_voc.py`
@@ -103,8 +105,6 @@ class HicoEvaluator(DatasetEvaluator):
                 self._dataset_name
             )
         )
-        tmp_input_img_folder = "../data/HICO_DET/images/test2015"
-        tmp_json_folder = "../data/HICO_DET/hico_det_json"
         with tempfile.TemporaryDirectory(prefix="pascal_voc_eval_") as dirname:
             res_file_template = os.path.join(dirname, "{}.txt")
 
@@ -120,8 +120,8 @@ class HicoEvaluator(DatasetEvaluator):
                     rec, prec, ap = debug_voc_eval(
                         self._detect_result, 
                         res_file_template, 
-                        tmp_input_img_folder, 
-                        tmp_json_folder,
+                        self._input_img_folder, 
+                        self._json_folder,
                         cls_name,
                         ovthresh=thresh / 100.0,
                     )
@@ -129,8 +129,8 @@ class HicoEvaluator(DatasetEvaluator):
                     # else:
                     rec, prec, ap = voc_eval(
                         res_file_template, 
-                        tmp_input_img_folder, 
-                        tmp_json_folder,
+                        self._input_img_folder, 
+                        self._json_folder,
                         cls_name,
                         ovthresh=thresh / 100.0,
                     )

@@ -67,6 +67,8 @@ def load_hico_data(img_folder:str, json_folder:str, split:str):
             human_bbox = human_bboxes[0]
             object_bbox = object_bboxes[0]
             hoi_box = get_hoi_box(human_bbox, object_bbox)
+            verb = hoi_list[int(action) - 1]["verb"]
+
             # insert object
             instances.append(
                 {"category_id": class_names.index(object_name), 

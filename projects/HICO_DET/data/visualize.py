@@ -54,31 +54,15 @@ def load_hico_data(img_folder:str, json_folder:str, split:str):
             human_bbox = human_bboxes[0]
             object_bbox = object_bboxes[0]
             hoi_box = get_hoi_box(human_bbox, object_bbox)
-
+            verb = hoi_list[int(action) - 1]["verb"]
             # insert object
-            if object_name == "person":
-                instances.append(
-                    {"category_id": class_names.index(object_name), 
-                    "bbox":object_bbox,
-                    "bbox_mode":BoxMode.XYXY_ABS
-                        }
-                    )
-            # # insert hoi
-            # instances.append(
-            #     {"category_id": int(action) + 80,
-            #     "bbox":hoi_box,
-            #     "bbox_mode":BoxMode.XYXY_ABS
-            #         }
-            #     )
-            # insert human
-            human_dict = {"category_id": class_names.index("person"), 
-                "bbox":human_bbox,
+            instances.append(
+                {"category_id": class_names.index(object_name), 
+                "object_bbox":object_bbox,
+                "human_bbox":human_bbox,
                 "bbox_mode":BoxMode.XYXY_ABS
                     }
-            if human_dict not in instances:
-                instances.append(
-                    human_dict
-                    )
+                )
         r["annotations"] = instances
         list_dict.append(r)
     return list_dict
@@ -121,11 +105,12 @@ for d in dataset_dicts:
     global_id = "HICO_test2015_" + str(image_id).zfill(8)
     if global_id not in debug_list:
         continue
-    img = cv2.imread(d["file_name"])
-    v = Visualizer(img[:, :, ::-1], metadata=metadata, scale=0.5)
-    v = v.draw_dataset_dict(d)
-    img = cv2.cvtColor(v.get_image()[:, :, ::-1], cv2.COLOR_BGR2RGB)
-    output_path = "outputs/" + global_id + ".jpg"
-    print(output_path)
-    cv2.imwrite(output_path, img)
+    
+    # img = cv2.imread(d["file_name"])
+    # v = Visualizer(img[:, :, ::-1], metadata=metadata, scale=0.5)
+    # v = v.draw_dataset_dict(d)
+    # img = cv2.cvtColor(v.get_image()[:, :, ::-1], cv2.COLOR_BGR2RGB)
+    # output_path = "outputs/" + global_id + ".jpg"
+    # print(output_path)
+    # cv2.imwrite(output_path, img)
     

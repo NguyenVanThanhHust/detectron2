@@ -14,6 +14,10 @@ from detectron2.utils import comm
 import pickle
 
 from detectron2.evaluation.evaluator import DatasetEvaluator
+from utils import get_ground_truth, get_hoi_box
+
+rare_list = []
+non_rare_list = []
 
 class HicoEvaluator(DatasetEvaluator):
     """
@@ -25,24 +29,68 @@ class HicoEvaluator(DatasetEvaluator):
     official API.
     """
 
-    def __init__(self, dataset_name, img_folder, json_folder):
+    def __init__(self, dataset_name, json_folder):
         """
         Args:
             dataset_name (str): name of the dataset, e.g., "voc_2007_test"
         """
         self._dataset_name = dataset_name
         meta = MetadataCatalog.get(dataset_name)
-        self._input_img_folder = img_folder
         self._json_folder = json_folder
+
+        class_names = []
+        with open(osp.join(json_folder, "hoi_list.json")) as jfp:
+            hoi_list = json.load(jfp)
+            for i in range(600):
+                class_names.append(str(i+1))
+        self._class_names = class_names
         
-        self._class_names = ["person"]
         self._cpu_device = torch.device("cpu")
         self._logger = logging.getLogger(__name__)
+        self._detect_result = dict()
+        self._predictions = defaultdict(list)  # class name -> list of prediction strings
         self._detect_result = dict()
 
     def reset(self):
         self._predictions = defaultdict(list)  # class name -> list of prediction strings
         self._detect_result = dict()
+
+    def _process_test(self, det_res_file=None):
+        if det_res_file:
+            with open(det_res_file, "rb") as f:
+                self._detect_result = pickle.load(f)
+        else:
+            with open(osp.join(self._json_folder, "anno_list.json")) as jfp:
+                full_data = json.load(jfp)
+            with open(osp.join(self._json_folder, "hoi_list.json")) as jfp:
+                hoi_list = json.load(jfp)
+
+            for each_instance in full_data:
+                global_id = each_instance["global_id"]
+                if "train" in global_id:
+                    continue
+
+                hois = each_instance["hois"]
+                for hoi in hois:
+                    human_bboxes = hoi["human_bboxes"]
+                    action = hoi["id"]
+                    invis = hoi["invis"] # invisible
+                    if invis:
+                        continue
+                    object_bboxes = hoi["object_bboxes"]
+                    object_name = hoi_list[int(action) - 1]["object"]
+                    human_bbox = human_bboxes[0]
+                    object_bbox = object_bboxes[0]
+                    hoi_box = get_hoi_box(human_bbox, object_bbox)
+                    verb = hoi_list[int(action) - 1]["verb"]
+                    h_xmin, h_ymin, h_xmax, h_ymax = human_bbox
+                    o_xmin, o_ymin, o_xmax, o_ymax = object_bbox
+                    score = 1.0
+                    each_cls = action
+                    self._predictions[each_cls].append(
+                        f"{global_id} {score:.3f} {h_xmin:.1f} {h_ymin:.1f} {h_xmax:.1f} {h_ymax:.1f} \
+                                                {o_xmin:.1f} {o_ymin:.1f} {o_xmax:.1f} {o_ymax:.1f} "
+                    )
 
     def _process(self, inputs, outputs):
         for input, output in zip(inputs, outputs):
@@ -103,8 +151,6 @@ class HicoEvaluator(DatasetEvaluator):
                 self._dataset_name
             )
         )
-        tmp_input_img_folder = "../data/HICO_DET/images/test2015"
-        tmp_json_folder = "../data/HICO_DET/hico_det_json"
         with tempfile.TemporaryDirectory(prefix="pascal_voc_eval_") as dirname:
             res_file_template = os.path.join(dirname, "{}.txt")
 
@@ -118,37 +164,19 @@ class HicoEvaluator(DatasetEvaluator):
                 for thresh in [50]:
                     # if debug:
                     rec, prec, ap = debug_voc_eval(
-                        self._detect_result, 
                         res_file_template, 
-                        tmp_input_img_folder, 
-                        tmp_json_folder,
+                        self._json_folder,
                         cls_name,
                         ovthresh=thresh / 100.0,
                     )
 
-                    # else:
-                    rec, prec, ap = voc_eval(
-                        res_file_template, 
-                        tmp_input_img_folder, 
-                        tmp_json_folder,
-                        cls_name,
-                        ovthresh=thresh / 100.0,
-                    )
-                    aps[thresh].append(ap * 100)
         print(aps)
+        print(rec, prec, ap)
         ret = OrderedDict()
         mAP = {iou: np.mean(x) for iou, x in aps.items()}
         ret["bbox"] = {"mAP": mAP[50], }
         return ret
 
-
-def get_hoi_box(human_bbox, object_bbox):
-    h_xmin, h_ymin, h_xmax, h_ymax = human_bbox
-    o_xmin, o_ymin, o_xmax, o_ymax = object_bbox
-    xmin, ymin = min(h_xmin, o_xmin), min(h_ymin, o_ymin)
-    xmax, ymax = max(h_xmax, o_xmax), max(h_ymax, o_ymax)
-    hoi_bbox = [xmin, ymin, xmax, ymax]
-    return hoi_bbox
 
 ##############################################################################
 #
@@ -194,8 +222,7 @@ def voc_ap(rec, prec, use_07_metric=False):
         ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
     return ap
 
-
-def voc_eval(detpath, img_folder, json_folder, class_name, ovthresh=0.5):
+def debug_voc_eval(detpath, json_folder, classname, ovthresh=0.5):
     """rec, prec, ap = voc_eval(detpath,
                                 annopath,
                                 imagesetfile,
@@ -215,275 +242,60 @@ def voc_eval(detpath, img_folder, json_folder, class_name, ovthresh=0.5):
     # assumes annotations are in annopath.format(imagename)
     # assumes imagesetfile is a text file with each line an image name
 
+    # load annots
+    with open(osp.join(json_folder, "anno_list.json")) as jfp:
+        full_data = json.load(jfp)
+
+    # class_names = []
+    # with open(osp.join(json_folder, "hoi_list.json")) as jfp:
+    #     hoi_list = json.load(jfp)
+    #     for i in range(600):
+    #         class_names.append(str(i+1))
+
     # first load gt
-    # read list of images
+    recs = get_ground_truth(json_folder)
+    full_image_ids = list(recs.keys())
+    
+    # extract gt objects for this class
+    class_recs = {}
+    npos = 0
+    for image_id in full_image_ids:
+        instances = recs[image_id]
+        human_bbox = np.array([x["human_bbox"] for x in instances])
+        object_bbox = np.array([x["object_bbox"] for x in instances])
+        det = [False] * len(instances)
+        difficult = [False] * len(instances)
+        npos += len(human_bbox)
+        class_recs[image_id] = {"human_bbox": human_bbox,"object_bbox": object_bbox, "difficult": difficult, "det": det}
 
     # read dets
-    detfile = detpath.format(class_name)
+    detfile = detpath.format(classname)
     with open(detfile, "r") as f:
         lines = f.readlines()
-    splitlines = [x.strip().split(" ") for x in lines]
-    image_ids = [int(x[0]) for x in splitlines]
-    confidence = np.array([float(x[1]) for x in splitlines])
-    bboxes = [ [x[2], x[3], x[4], x[5]] for x in splitlines]
-    sorted_ind = np.argsort(confidence)
-    sorted_ind = np.flip(sorted_ind)
-    
-    global_ids = ["HICO_test2015_" + str(x).zfill(8) + ".jpg" for x in image_ids]
-    bboxes = np.array(bboxes)
-    bboxes = bboxes[sorted_ind]
 
-    global_ids = sorted(list(set(global_ids)))
+    splitlines = [x.strip().split(" ") for x in lines]
+    image_ids = [x[0] for x in splitlines]
+    confidence = np.array([float(x[1]) for x in splitlines])
+    Human_Object_BB = np.array([[float(z) for z in x[2:9]] for x in splitlines]).reshape(-1, 4)
+    # Object_BB = np.array([[float(z) for z in x[6:9]] for x in splitlines]).reshape(-1, 4)
+
+     # sort by confidence
+    sorted_ind = np.argsort(-confidence)
+    Human_Object_BB = Human_BB[sorted_ind, :]
+    # Object_BB = Object_BB[sorted_ind, :]
+    image_ids = [image_ids[x] for x in sorted_ind]
+
 
     # go down dets and mark TPs and FPs
     nd = len(image_ids)
     tp = np.zeros(nd)
     fp = np.zeros(nd)
 
-    # load annots
-    with open(osp.join(json_folder, "anno_list.json")) as jfp:
-        full_data = json.load(jfp)
-
-    class_names = []    
-    with open(osp.join(json_folder, "object_list.json")) as jfp:
-        object_list = json.load(jfp)
-        for each_object in object_list:
-            object_name = each_object["name"]
-            class_names.append(object_name)
-    with open(osp.join(json_folder, "hoi_list.json")) as jfp:
-        hoi_list = json.load(jfp)
-        for i in range(600):
-            class_names.append(str(i+1))
-    class_names = ["person"]
-
-    # checkLater = ["HICO_test2015_00003183", 
-    #               "HICO_test2015_00008435", 
-    #                 "HICO_train2015_00011533",
-    #                 "HICO_test2015_00007684",
-    #                 "HICO_test2015_00008817" ]
-                
-    recs = {}
-    for each_instance in full_data:
-        global_id = each_instance["global_id"]
-        if "train" in global_id:
-            continue
-
-        image_id = int(global_id[-8:])
-        if image_id not in image_ids:
-            continue
-
-        instances = []
-
-        hois = each_instance["hois"]
-        for hoi in hois:
-            human_bboxes = hoi["human_bboxes"]
-            action = hoi["id"]
-            invis = hoi["invis"] # invisible
-            if invis:
-                continue
-            object_bboxes = hoi["object_bboxes"]
-            object_name = hoi_list[int(action) - 1]["object"]
-            human_bbox = human_bboxes[0]
-            object_bbox = object_bboxes[0]
-            hoi_box = get_hoi_box(human_bbox, object_bbox)
-            # insert object
-            if object_name == "person":
-                instances.append(
-                    {"label": object_name, 
-                    "bbox":object_bbox,
-                        }
-                    )
-            # insert human
-            human_dict = {"label": "person", 
-                "bbox":human_bbox,
-                    }
-            if human_dict not in instances:
-                instances.append(
-                    human_dict
-                    )
-        recs[image_id] = instances
-
-    # extract gt objects for this class
-    class_recs = {}
-    npos = 0
-    for image_id in image_ids:
-        instances = recs[image_id]
-        bbox = np.array([x["bbox"] for x in instances])
-        det = [False] * len(instances)
-        difficult = [False] * len(instances)
-        npos += len(bbox)
-        class_recs[image_id] = {"bbox": bbox, "difficult": difficult, "det": det}
-
     for d in range(nd):
         R = class_recs[image_ids[d]]
-        bb = bboxes[d, :].astype(float)
+        hoi_bb = Human_Object_BB[d, :].astype(float)
         ovmax = -np.inf
-        BBGT = np.array(R["bbox"]).astype(float)
-        if BBGT.size > 0:
-            # compute overlaps
-            # intersection
-            ixmin = np.maximum(BBGT[:, 0], bb[0])
-            iymin = np.maximum(BBGT[:, 1], bb[1])
-            ixmax = np.minimum(BBGT[:, 2], bb[2])
-            iymax = np.minimum(BBGT[:, 3], bb[3])
-
-            iw = np.maximum(ixmax - ixmin + 1.0, 0.0)
-            ih = np.maximum(iymax - iymin + 1.0, 0.0)
-            # print(iw, ih)
-            inters = iw * ih
-
-            # union
-            uni = (
-                (bb[2] - bb[0] + 1.0) * (bb[3] - bb[1] + 1.0)
-                + (BBGT[:, 2] - BBGT[:, 0] + 1.0) * (BBGT[:, 3] - BBGT[:, 1] + 1.0)
-                - inters
-            )
-
-            overlaps = inters / uni
-            ovmax = np.max(overlaps)
-            jmax = np.argmax(overlaps)
-        if ovmax > ovthresh:
-            if not R["difficult"][jmax]:
-                if not R["det"][jmax]:
-                    tp[d] = 1.0
-                    R["det"][jmax] = 1
-                else:
-                    fp[d] = 1.0
-        else:
-            fp[d] = 1.0
-    # print("tp: {}".format(tp))
-    # compute precision recall
-    fp = np.cumsum(fp)
-    tp = np.cumsum(tp)
-
-    rec = tp / float(npos)
-    prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
-    ap = voc_ap(rec, prec)
-    return rec, prec, ap
-
-def debug_voc_eval(detect_result, detpath, img_folder, json_folder, class_name, ovthresh=0.5):
-    """rec, prec, ap = voc_eval(detpath,
-                                annopath,
-                                imagesetfile,
-                                classname,
-                                [ovthresh],
-                                )
-    Top level function that does the PASCAL VOC evaluation.
-    detpath: Path to detections
-        detpath.format(classname) should produce the detection results file.
-    annopath: Path to annotations
-        annopath.format(imagename) should be the xml annotations file.
-    imagesetfile: Text file containing the list of images, one image per line.
-    classname: Category name (duh)
-    [ovthresh]: Overlap threshold (default = 0.5)
-    """
-    # assumes detections are in detpath.format(classname)
-    # assumes annotations are in annopath.format(imagename)
-    # assumes imagesetfile is a text file with each line an image name
-
-    # first load gt
-    # read list of images
-    
-    # read dets
-    detection_results = []
-    image_ids = []
-    for k, v in detect_result.items():
-        image_id = k
-        dets = v
-
-        for det in dets:
-            detection_results.append(det)
-        image_ids.append(image_id)
-
-    global_confidence = [det["score"] for det in detection_results]
-    global_sorted_ind = np.argsort(global_confidence)
-    global_sorted_ind = np.flip(global_sorted_ind)
-
-    # load annots
-    with open(osp.join(json_folder, "anno_list.json")) as jfp:
-        full_data = json.load(jfp)
-
-    class_names = []    
-    with open(osp.join(json_folder, "object_list.json")) as jfp:
-        object_list = json.load(jfp)
-        for each_object in object_list:
-            object_name = each_object["name"]
-            class_names.append(object_name)
-    with open(osp.join(json_folder, "hoi_list.json")) as jfp:
-        hoi_list = json.load(jfp)
-        for i in range(600):
-            class_names.append(str(i+1))
-    class_names = ["person"]
-
-    recs = {}
-    for each_instance in full_data:
-        global_id = each_instance["global_id"]
-        if "train" in global_id:
-            continue
-
-        image_id = int(global_id[-8:])
-        if image_id not in image_ids:
-            continue
-
-        instances = []
-        hois = each_instance["hois"]
-        for hoi in hois:
-            human_bboxes = hoi["human_bboxes"]
-            action = hoi["id"]
-            invis = hoi["invis"] # invisible
-            if invis:
-                continue
-            object_bboxes = hoi["object_bboxes"]
-            object_name = hoi_list[int(action) - 1]["object"]
-            human_bbox = human_bboxes[0]
-            object_bbox = object_bboxes[0]
-            hoi_box = get_hoi_box(human_bbox, object_bbox)
-            # insert object
-            if object_name == "person":
-                instances.append(
-                    {"label": object_name, 
-                    "bbox":object_bbox,
-                        }
-                    )
-            # insert human
-            human_dict = {"label": "person", 
-                "bbox":human_bbox,
-                    }
-            if human_dict not in instances:
-                instances.append(
-                    human_dict
-                    )
-        recs[image_id] = instances
-
-    # extract gt objects for this class
-    class_recs = {}
-    npos = 0
-    for image_id in image_ids:
-        instances = recs[image_id]
-        bbox = np.array([x["bbox"] for x in instances])
-        det = [False] * len(instances)
-        difficult = [False] * len(instances)
-        npos += len(bbox)
-        class_recs[image_id] = {"bbox": bbox, "difficult": difficult, "det": det}
-
-    tp = np.zeros(1,)
-    fp = np.zeros(1,)
-
-    for k, v in detect_result.items():
-        image_id = k
-        dets = v
-
-        results = []
-        
-        results = dets
-
-        current_nd = len(dets)
-        current_tp = np.zeros(current_nd)
-        current_fp = np.zeros(current_nd)
-        confidence = [det["score"] for det in results]
-        sorted_ind = np.argsort(confidence)
-        sorted_ind = np.flip(sorted_ind)
-        R = class_recs[image_id]
+        HOI_BBGT = R["human_bbox"].astype(float)
 
         for index in sorted_ind:
             bb = results[index]["box"]
@@ -542,10 +354,11 @@ def debug_voc_eval(detect_result, detpath, img_folder, json_folder, class_name, 
 
 def test():
     dataset_name = "HICO_DET_test_person"
-    img_folder = "../../../data/HICO_DET/images/test2015"
+    # img_folder = "../../../data/HICO_DET/images/test2015"
     json_folder = "../../../data/HICO_DET/hico_det_json"
-    hico_evaluator = HicoEvaluator(dataset_name, img_folder, json_folder)
-    hico_evaluator.process(inputs=None, outputs=None, recompute=False)
+    # hico_evaluator = HicoEvaluator(dataset_name, img_folder, json_folder)
+    hico_evaluator = HicoEvaluator(dataset_name, json_folder)
+    hico_evaluator._process_test()
     ret = hico_evaluator.evaluate()
 
 test()
