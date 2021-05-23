@@ -67,6 +67,7 @@ def get_ground_truth(json_folder):
             verb_id = verb_names.index(verb) + 1
             instances.append(
                 {"object_id": object_names.index(object_name) + 1,
+                "object_name":object_name,
                 "object_bbox":object_bbox,
                 "human_bbox":human_bbox,
                 "verb": verb,
