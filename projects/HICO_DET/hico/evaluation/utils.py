@@ -22,6 +22,39 @@ def get_hoi_box(human_bbox, object_bbox):
     hoi_bbox = [xmin, ymin, xmax, ymax]
     return hoi_bbox
 
+def single_iou(bb_gt, pred_bb):
+    # compute overlaps
+    # intersection
+    ixmin = np.maximum(bb_gt[:, 0], pred_bb[0])
+    iymin = np.maximum(bb_gt[:, 1], pred_bb[1])
+    ixmax = np.minimum(bb_gt[:, 2], pred_bb[2])
+    iymax = np.minimum(bb_gt[:, 3], pred_bb[3])
+    iw = np.maximum(ixmax - ixmin + 1.0, 0.0)
+    ih = np.maximum(iymax - iymin + 1.0, 0.0)
+    inters = iw * ih
+
+    # union
+    uni = (
+        (pred_bb[2] - pred_bb[0] + 1.0) * (pred_bb[3] - pred_bb[1] + 1.0)
+        + (bb_gt[:, 2] - bb_gt[:, 0] + 1.0) * (bb_gt[:, 3] - bb_gt[:, 1] + 1.0)
+        - inters
+    )
+
+    overlaps = inters / uni
+    # sys.exit()
+    ovmax = np.max(overlaps)
+    jmax = np.argmax(overlaps)
+    return jmax, ovmax
+
+
+def get_hoi_iou(object_gt, human_gt, hoi_bb):
+    pred_human_box = hoi_bb[:4]
+    pred_object_box = hoi_bb[4:]
+    human_jmax, human_ovmax = single_iou(human_gt, pred_human_box)
+    object_jmax, object_ovmax = single_iou(object_gt, pred_object_box)
+    if human_ovmax < object_ovmax:
+        return human_jmax, human_ovmax, True
+    return object_jmax, object_ovmax, False
 
 def get_ground_truth(json_folder):
     with open(osp.join(json_folder, "anno_list.json")) as jfp:
@@ -54,16 +87,16 @@ def get_ground_truth(json_folder):
         hois = each_instance["hois"]
         for hoi in hois:
             human_bboxes = hoi["human_bboxes"]
-            action = hoi["id"]
+            hoi_id = hoi["id"]
             invis = hoi["invis"] # invisible
             if invis:
                 continue
             object_bboxes = hoi["object_bboxes"]
-            object_name = hoi_list[int(action) - 1]["object"]
+            object_name = hoi_list[int(hoi_id) - 1]["object"]
             human_bbox = human_bboxes[0]
             object_bbox = object_bboxes[0]
             # hoi_box = get_hoi_box(human_bbox, object_bbox)
-            verb = hoi_list[int(action) - 1]["verb"]
+            verb = hoi_list[int(hoi_id) - 1]["verb"]
             verb_id = verb_names.index(verb) + 1
             instances.append(
                 {"object_id": object_names.index(object_name) + 1,
@@ -71,7 +104,7 @@ def get_ground_truth(json_folder):
                 "human_bbox":human_bbox,
                 "verb": verb,
                 "verb_id": verb_id, 
-                "hoi":action, 
+                "hoi_id":hoi_id, 
                     }
                 )
         gts_dict[global_id] = instances

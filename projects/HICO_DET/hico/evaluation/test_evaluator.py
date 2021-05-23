@@ -14,7 +14,7 @@ from detectron2.utils import comm
 import pickle
 
 from detectron2.evaluation.evaluator import DatasetEvaluator
-from utils import get_ground_truth, get_hoi_box
+from utils import get_ground_truth, get_hoi_box, get_hoi_iou
 
 rare_list = []
 non_rare_list = []
@@ -38,13 +38,12 @@ class HicoEvaluator(DatasetEvaluator):
         meta = MetadataCatalog.get(dataset_name)
         self._json_folder = json_folder
 
-        class_names = []
-        with open(osp.join(json_folder, "object_list.json")) as jfp:
-            object_list = json.load(jfp)
-            for each_object in object_list:
-                class_names.append(each_object["name"])
-        self._class_names = class_names
-        
+        hoi_ids = []
+        with open(osp.join(json_folder, "hoi_list.json")) as jfp:
+            hoi_list = json.load(jfp)
+            for each_hoi in hoi_list:
+                hoi_ids.append(each_hoi["id"])
+        self._class_names = hoi_ids
         self._gts = get_ground_truth(json_folder)
         self._cpu_device = torch.device("cpu")
         self._logger = logging.getLogger(__name__)
@@ -76,26 +75,23 @@ class HicoEvaluator(DatasetEvaluator):
                 global_id = each_instance["global_id"]
                 if "train" in global_id:
                     continue
-
                 hois = each_instance["hois"]
                 for hoi in hois:
                     human_bboxes = hoi["human_bboxes"]
-                    action = hoi["id"]
+                    hoi_id = hoi["id"]
                     invis = hoi["invis"] # invisible
                     if invis:
                         continue
                     object_bboxes = hoi["object_bboxes"]
-                    object_name = hoi_list[int(action) - 1]["object"]
+                    object_name = hoi_list[int(hoi_id) - 1]["object"]
                     human_bbox = human_bboxes[0]
                     object_bbox = object_bboxes[0]
                     hoi_box = get_hoi_box(human_bbox, object_bbox)
-                    verb = hoi_list[int(action) - 1]["verb"]
+                    verb = hoi_list[int(hoi_id) - 1]["verb"]
                     h_xmin, h_ymin, h_xmax, h_ymax = human_bbox
                     o_xmin, o_ymin, o_xmax, o_ymax = object_bbox
                     score = 1.0
-                    each_cls = action
-                    object_id = object_names.index(object_name) + 1
-                    self._predictions[object_id].append(
+                    self._predictions[hoi_id].append(
                         f"{global_id} {score:.3f} {h_xmin:.1f} {h_ymin:.1f} {h_xmax:.1f} {h_ymax:.1f} {o_xmin:.1f} {o_ymin:.1f} {o_xmax:.1f} {o_ymax:.1f} "
                     )
 
@@ -163,13 +159,13 @@ class HicoEvaluator(DatasetEvaluator):
 
             aps = defaultdict(list)  # iou -> ap per class
             for cls_id, cls_name in enumerate(self._class_names):
-                lines = predictions.get(cls_id+1, [""])
+                lines = predictions.get(cls_name, [""])
                 with open(res_file_template.format(cls_name), "w") as f:
                     f.write("\n".join(lines))
                 # FIX: use inside class variable
                 for thresh in [50]:
                     # if debug:
-                    rec, prec, ap = debug_voc_eval(
+                    rec, prec, ap = voc_eval(
                         self._gts, 
                         res_file_template, 
                         self._json_folder,
@@ -181,6 +177,7 @@ class HicoEvaluator(DatasetEvaluator):
         ret = OrderedDict()
         mAP = {iou: np.mean(x) for iou, x in aps.items()}
         ret["bbox"] = {"mAP": mAP[50], }
+        print(mAP)
         print(ret)
         return ret
 
@@ -229,7 +226,7 @@ def voc_ap(rec, prec, use_07_metric=False):
         ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
     return ap
 
-def debug_voc_eval(gts, detpath, json_folder, classname, ovthresh=0.5):
+def voc_eval(gts, detpath, json_folder, classname, ovthresh=0.5):
     """rec, prec, ap = voc_eval(detpath,
                                 annopath,
                                 imagesetfile,
@@ -259,9 +256,8 @@ def debug_voc_eval(gts, detpath, json_folder, classname, ovthresh=0.5):
     npos = 0
     for image_id in full_image_ids:
         instances = recs[image_id]
-        instances = [obj for obj in recs[image_id] if obj["object_name"]==classname]
+        instances = [obj for obj in recs[image_id] if obj["hoi_id"]==classname]
         human_bbox = np.array([x["human_bbox"] for x in instances])
-        # print(human_bbox)
         object_bbox = np.array([x["object_bbox"] for x in instances])
         det = [False] * len(instances)
         difficult = [False] * len(instances)
@@ -276,14 +272,11 @@ def debug_voc_eval(gts, detpath, json_folder, classname, ovthresh=0.5):
     splitlines = [x.strip().split(" ") for x in lines]
     image_ids = [x[0] for x in splitlines]
     confidence = np.array([float(x[1]) for x in splitlines])
-    # print(splitlines[0])
     Human_Object_BB = np.array([[float(x) for x in x[2:10]] for x in splitlines]).reshape(-1, 8)
-    # Object_BB = np.array([[float(z) for z in x[6:9]] for x in splitlines]).reshape(-1, 4)
 
      # sort by confidence
     sorted_ind = np.argsort(-confidence)
     Human_Object_BB = Human_Object_BB[sorted_ind, :]
-    # Object_BB = Object_BB[sorted_ind, :]
     image_ids = [image_ids[x] for x in sorted_ind]
 
 
@@ -294,31 +287,14 @@ def debug_voc_eval(gts, detpath, json_folder, classname, ovthresh=0.5):
 
     for d in range(nd):
         R = class_recs[image_ids[d]]
-        hoi_bb = Human_Object_BB[d, :][4:].astype(float)
+        hoi_bb = Human_Object_BB[d, :].astype(float)
         ovmax = -np.inf
-        HOI_BBGT = R["object_bbox"].astype(float)
-        if HOI_BBGT.size > 0:
-            # compute overlaps
-            # intersection
-            ixmin = np.maximum(HOI_BBGT[:, 0], hoi_bb[0])
-            iymin = np.maximum(HOI_BBGT[:, 1], hoi_bb[1])
-            ixmax = np.minimum(HOI_BBGT[:, 2], hoi_bb[2])
-            iymax = np.minimum(HOI_BBGT[:, 3], hoi_bb[3])
-            iw = np.maximum(ixmax - ixmin + 1.0, 0.0)
-            ih = np.maximum(iymax - iymin + 1.0, 0.0)
-            inters = iw * ih
-
-            # union
-            uni = (
-                (hoi_bb[2] - hoi_bb[0] + 1.0) * (hoi_bb[3] - hoi_bb[1] + 1.0)
-                + (HOI_BBGT[:, 2] - HOI_BBGT[:, 0] + 1.0) * (HOI_BBGT[:, 3] - HOI_BBGT[:, 1] + 1.0)
-                - inters
-            )
-
-            overlaps = inters / uni
-            # sys.exit()
-            ovmax = np.max(overlaps)
-            jmax = np.argmax(overlaps)
+        OBJ_BBGT = R["object_bbox"].astype(float)
+        HUM_BBGT = R["human_bbox"].astype(float)
+        assert OBJ_BBGT.shape == HUM_BBGT.shape, "wrong shape, check"
+        if OBJ_BBGT.size > 0 :
+            jmax, ovmax, is_human_box = get_hoi_iou(OBJ_BBGT, HUM_BBGT, hoi_bb)
+        
         if ovmax > ovthresh:
             if not R["difficult"][jmax]:
                 if not R["det"][jmax]:
