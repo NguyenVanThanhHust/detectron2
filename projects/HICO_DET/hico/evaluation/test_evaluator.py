@@ -112,13 +112,7 @@ class HicoEvaluator(DatasetEvaluator):
                 self._predictions[each_cls].append(
                     f"{image_id} {score:.3f} {xmin:.1f} {ymin:.1f} {xmax:.1f} {ymax:.1f} "
                 )
-                if image_id not in self._detect_result.keys():
-                    self._detect_result[image_id] = list()
                 
-                _tmp_dict = {"cls": each_cls, "box":[xmin, ymin, xmax, ymax],
-                    "score":score}
-                self._detect_result[image_id].append(_tmp_dict)
-
     def process(self, inputs, outputs, recompute=True):
         if recompute:
             self._process(inputs, outputs)
@@ -133,7 +127,7 @@ class HicoEvaluator(DatasetEvaluator):
                 with open("det_res.pkl", "wb") as f:
                     pickle.dump(self._predictions, f)
 
-    def evaluate(self, debug=False):
+    def evaluate(self):
         """
         Returns:
             dict: has a key "segm", whose value is a dict of "AP", "AP50", and "AP75".
