@@ -16,8 +16,7 @@ import pickle
 from detectron2.evaluation.evaluator import DatasetEvaluator
 from utils import get_ground_truth, get_hoi_box, get_hoi_iou
 
-rare_list = []
-non_rare_list = []
+rare_hoi = ['009', '023', '028', '045', '051', '056', '063', '064', '067', '071', '077', '078', '081', '084', '085', '091', '100', '101', '105', '108', '113', '128', '136', '137', '150', '159', '166', '167', '169', '173', '180', '182', '185', '189', '190', '193', '196', '199', '206', '207', '215', '217', '223', '228', '230', '239', '240', '255', '256', '258', '261', '262', '263', '275', '280', '281', '282', '287', '290', '293', '304', '312', '316', '318', '326', '329', '334', '335', '346', '351', '352', '355', '359', '365', '380', '382', '390', '391', '392', '396', '398', '399', '400', '402', '403', '404', '405', '406', '408', '411', '417', '419', '427', '428', '430', '432', '437', '440', '441', '450', '452', '464', '470', '475', '483', '486', '499', '500', '505', '510', '515', '518', '521', '523', '527', '532', '536', '540', '547', '548', '549', '550', '551', '552', '553', '556', '557', '561', '579', '581', '582', '587', '593', '594', '596', '597', '598', '600']
 
 class HicoEvaluator(DatasetEvaluator):
     """
@@ -157,7 +156,9 @@ class HicoEvaluator(DatasetEvaluator):
         with tempfile.TemporaryDirectory(prefix="pascal_voc_eval_") as dirname:
             res_file_template = os.path.join(dirname, "{}.txt")
 
-            aps = defaultdict(list)  # iou -> ap per class
+            full_aps = defaultdict(list)  # iou -> ap per class
+            rare_aps = defaultdict(list)
+            non_rare_aps = defaultdict(list)
             for cls_id, cls_name in enumerate(self._class_names):
                 lines = predictions.get(cls_name, [""])
                 with open(res_file_template.format(cls_name), "w") as f:
@@ -172,12 +173,18 @@ class HicoEvaluator(DatasetEvaluator):
                         cls_name,
                         ovthresh=thresh / 100.0,
                     )
-                    aps[thresh].append(ap * 100)
+                    full_aps[thresh].append(ap * 100)
+                    if cls_name in rare_hoi:
+                        rare_aps[thresh].append(ap * 100)
+                    else:
+                        non_rare_aps[thresh].append(ap * 100)
 
         ret = OrderedDict()
-        mAP = {iou: np.mean(x) for iou, x in aps.items()}
-        ret["bbox"] = {"mAP": mAP[50], }
-        print(mAP)
+        full_mAP = {iou: np.mean(x) for iou, x in full_aps.items()}
+        rare_mAP = {iou: np.mean(x) for iou, x in rare_aps.items()}
+        non_rare_mAP = {iou: np.mean(x) for iou, x in non_rare_aps.items()}
+        
+        ret["bbox"] = {"full mAP": full_mAP[50], "rare mAP":rare_mAP[50], "non rare mAP":non_rare_mAP[50]}
         print(ret)
         return ret
 
